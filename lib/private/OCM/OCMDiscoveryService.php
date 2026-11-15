@@ -212,7 +212,7 @@ final class OCMDiscoveryService implements IOCMDiscoveryService {
 			try {
 				// http-sig advertisement requires a jwksUri
 				$provider->setJwksUri($this->signatoryManager->getLocalJwksUri());
-				$provider->setCapabilities(['http-sig']);
+				$provider->setCapabilities(['http-sig', 'notifications-sender-domain']);
 			} catch (IdentityNotFoundException $e) {
 				$this->logger->warning('cannot build local jwksUri, http-sig capability not advertised', ['exception' => $e]);
 			}
@@ -288,6 +288,37 @@ final class OCMDiscoveryService implements IOCMDiscoveryService {
 			throw new IncomingRequestException('Invalid signature');
 		}
 		return null;
+	}
+
+	/**
+	 * @inheritDoc
+	 *
+	 * @throws IncomingRequestException
+	 * @since 36.0.0
+	 */
+	#[\Override]
+	public function getIncomingSignedRequestFromDomain(string $senderDomain): IIncomingSignedRequest {
+		try {
+			$origin = $this->signatureManager->extractIdentityFromUri('https://' . $senderDomain);
+			$signedRequest = $this->signatureManager->getIncomingSignedRequest($this->signatoryManager, null, $origin);
+		} catch (IdentityNotFoundException $e) {
+			throw new IncomingRequestException('invalid sender domain: ' . $senderDomain, previous: $e);
+		} catch (SignatureNotFoundException|SignatoryNotFoundException $e) {
+			$this->logger->debug('remote does not support signed request', ['exception' => $e]);
+			// as per OCM spec, sender should make HTTP request using httpsig
+			throw new IncomingRequestException('Unsigned request', previous: $e);
+		} catch (SignatureException $e) {
+			$this->logger->warning('wrongly signed request', ['exception' => $e]);
+			throw new IncomingRequestException('Invalid signature');
+		}
+
+		if ($signedRequest->getOrigin() !== $origin) {
+			throw new IncomingRequestException(
+				'sender domain ' . $origin . ' does not match signed origin ' . $signedRequest->getOrigin()
+			);
+		}
+
+		return $signedRequest;
 	}
 
 	/**

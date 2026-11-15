@@ -99,6 +99,16 @@ final class OCMCapabilities implements JsonSerializable {
 	}
 
 	/**
+	 * Whether the peer accepts notifications with a senderDomain field.
+	 * Such notifications must be signed with httpsig by the sender domain.
+	 *
+	 * @since 36.0.0
+	 */
+	public function hasNotificationsSenderDomain(): bool {
+		return $this->has('notifications-sender-domain');
+	}
+
+	/**
 	 * Raw list of advertised capability strings (normalized).
 	 *
 	 * @return list<string>
